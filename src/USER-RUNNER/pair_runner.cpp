@@ -1985,7 +1985,7 @@ void PairRuNNer::calc_G_dG_group(int ca, RuNNer_forces *F, RuNNer_symfuncGroup *
     double rcinv = 1.0 / rc;
     double rc2 = rc * rc;
     double rij, rik, rjk, rinvijik;
-    double r2ij, r2ik;
+    double r2ij, r2ik, r2jk;
     double pr1, pr2, pr3;
     double dxij, dyij, dzij;
     double dxik, dyik, dzik;
@@ -2008,6 +2008,11 @@ void PairRuNNer::calc_G_dG_group(int ca, RuNNer_forces *F, RuNNer_symfuncGroup *
     double* xptr = NULL;
     double* yptr = NULL;
     double* zptr = NULL;
+    
+    //!MC OPTIMIZATIONS!
+    double p1dxij, p1dyij, p1dzij;
+    double p2dxik, p2dyik, p2dzik;
+    double p3dxjk, p3dyjk, p3dzjk;
 
     value = new double[numSF];
     svalue = new double[numSF];
@@ -2056,7 +2061,7 @@ void PairRuNNer::calc_G_dG_group(int ca, RuNNer_forces *F, RuNNer_symfuncGroup *
             pnorm[isym] = pow(2.0, 1.0 - zeta[isym]);
         }
         Nnum = N->num;
-        for(int j=0; j<Nnum-1; j++) {
+        for(int j=0; j<Nnum-1; ++j) {
             Nej = N->e[j];
             rij = N->d[j];
             if( rij<=rc && (e1==Nej || e2==Nej) ) {
@@ -2066,7 +2071,7 @@ void PairRuNNer::calc_G_dG_group(int ca, RuNNer_forces *F, RuNNer_symfuncGroup *
                 dxij = N->dx[j];
                 dyij = N->dy[j];
                 dzij = N->dz[j];
-                for(int k=j+1; k<Nnum; k++) {
+                for(int k=j+1; k<Nnum; ++k) {
                     Nek = N->e[k];
                     if( (e1==Nej && e2==Nek) ||
                         (e2==Nej && e1==Nek) ) {
@@ -2076,9 +2081,9 @@ void PairRuNNer::calc_G_dG_group(int ca, RuNNer_forces *F, RuNNer_symfuncGroup *
                             dxjk = N->dx[k] - dxij;
                             dyjk = N->dy[k] - dyij;
                             dzjk = N->dz[k] - dzij;
-                            rjk = dxjk * dxjk + dyjk * dyjk + dzjk * dzjk;
-                            if(rjk <= rc2) {
-                                rjk = sqrt(rjk);
+                            r2jk = dxjk * dxjk + dyjk * dyjk + dzjk * dzjk;
+                            if(r2jk <= rc2) {
+                                rjk = sqrt(r2jk);
                                 rinvijik = 1.0 / (rij * rik);
                                 r2ik = rik * rik;
                                 dxik = N->dx[k];
@@ -2091,11 +2096,11 @@ void PairRuNNer::calc_G_dG_group(int ca, RuNNer_forces *F, RuNNer_symfuncGroup *
                                 pfc = pfcij * pfcik * pfcjk; 
                                 pdfcik = dfc(rik, rcinv);
                                 pdfcjk = dfc(rjk, rcinv);
-                                r2sum = r2ij + r2ik + rjk * rjk;
+                                r2sum = r2ij + r2ik + r2jk;
                                 pr1 = pfcik * pfcjk * pdfcij / rij;
                                 pr2 = pfcij * pfcjk * pdfcik / rik;
                                 pr3 = pfcij * pfcik * pdfcjk / rjk;
-                                for(int isym=0; isym<numSF; isym++) {
+                                for(int isym=0; isym<numSF; ++isym) {
                                     plambda = 1.0 + lambda[isym] * costijk;
                                     if(etaind[isym] == isym) {
                                         vexp = exp(-eta[isym] * r2sum);
@@ -2105,18 +2110,51 @@ void PairRuNNer::calc_G_dG_group(int ca, RuNNer_forces *F, RuNNer_symfuncGroup *
                                         if(optpow[isym]) fg = powint(plambda, optpow[isym] - 1) * vexp;
                                         else fg = pow(plambda, zeta[isym] - 1.0) * vexp;
                                     }
-                                    value[isym] += fg * plambda * pfc;
                                     // force calculation
+                                    /*
+                                    value[isym] += fg * plambda * pfc;                                    
                                     fg *= pnorm[isym];
                                     zl = zeta[isym] * lambda[isym];
                                     p2etaplambda = 2.0 * eta[isym] * plambda / zl;
-                                    p1 = fg * (pfc * zl * (rinvijik - costijk / r2ij - p2etaplambda) + pr1 * plambda);
-                                    p2 = fg * (pfc * zl * (rinvijik - costijk / r2ik - p2etaplambda) + pr2 * plambda);
-                                    p3 = fg * (pfc * zl * (rinvijik                  + p2etaplambda) - pr3 * plambda);
+                                    zl *= pfc/plambda;
+                                    //zlb=zl*pfc/plambda;
+                                    fg *= plambda; 
+                                    p1 = fg * (zl * (rinvijik - costijk / r2ij - p2etaplambda) + pr1);
+                                    p2 = fg * (zl * (rinvijik - costijk / r2ik - p2etaplambda) + pr2);
+                                    p3 = fg * (zl * (rinvijik                  + p2etaplambda) - pr3);
+                                    */
+                                    fg *= plambda;
+                                    value[isym] +=  fg * pfc;
+                                    fg *= pnorm[isym];
+                                    zl = zeta[isym] * lambda[isym] *pfc / plambda;
+                                    p2etaplambda = 2.0 * eta[isym] * pfc;
+                                                                         
+                                    p1 = fg * (zl * (rinvijik - costijk / r2ij) - p2etaplambda + pr1);
+                                    p2 = fg * (zl * (rinvijik - costijk / r2ik) - p2etaplambda + pr2);
+                                    p3 = fg * (zl * (rinvijik                 ) + p2etaplambda - pr3);
+                                    
+                                    
+                                    
+                                    
                                     // save force contributions in force class
                                     xptr = F->dGdx[index[isym]];
                                     yptr = F->dGdy[index[isym]];
                                     zptr = F->dGdz[index[isym]];
+                                    
+                                    /* MC OPTIMIZED */
+                                    p1dxij=p1*dxij; p1dyij=p1*dyij; p1dzij=p1*dzij; 
+                                    p2dxik=p2*dxik; p2dyik=p2*dyik; p2dzik=p2*dzik; 
+                                    xptr[Nnum] += p1dxij + p2dxik;
+                                    yptr[Nnum] += p1dyij + p2dyik;
+                                    zptr[Nnum] += p1dzij + p2dzik;                                    
+                                    p3dxjk=p3*dxjk; p3dyjk=p3*dyjk; p3dzjk=p3*dzjk; 
+                                    xptr[j] -= p1dxij + p3dxjk;
+                                    yptr[j] -= p1dyij + p3dyjk;
+                                    zptr[j] -= p1dzij + p3dzjk;
+                                    xptr[k] -= p2dxik - p3dxjk;
+                                    yptr[k] -= p2dyik - p3dyjk;
+                                    zptr[k] -= p2dzik - p3dzjk;
+                                    /* ORIGINAL
                                     xptr[Nnum] += p1 * dxij + p2 * dxik;
                                     yptr[Nnum] += p1 * dyij + p2 * dyik;
                                     zptr[Nnum] += p1 * dzij + p2 * dzik;
@@ -2125,7 +2163,8 @@ void PairRuNNer::calc_G_dG_group(int ca, RuNNer_forces *F, RuNNer_symfuncGroup *
                                     zptr[j] -= p1 * dzij + p3 * dzjk;
                                     xptr[k] -= p2 * dxik - p3 * dxjk;
                                     yptr[k] -= p2 * dyik - p3 * dyjk;
-                                    zptr[k] -= p2 * dzik - p3 * dzjk;
+                                    zptr[k] -= p2 * dzik - p3 * dzjk; 
+                                    */
                                 } // isym
                             } // rjk <= rc
                         } // rik <= rc
@@ -2797,12 +2836,24 @@ int PairRuNNer::RuNNer_neighbor::calc(RuNNer_atom **a, int i) {
 // find LAMMPS atom list index in RuNNer neighbor list
 int PairRuNNer::RuNNer_neighbor::find_nindex(int n) {
 
-    for(int i=0; i<num; i++) {
+    //!MC OPTIMIZED: ASSUMES THE LIST IS SORTED!!
+    int a=0, b=num-1, c=b; 
+    if ( ilal[a]>n  || ilal[b]<n) return -1;    
+    c=(a+b)/2;
+    while (c>a)
+    {       
+       if (ilal[c]>n) b=c; else a=c;
+       c=(a+b)/2;
+    }
+    
+    if (ilal[c]==n) return c; 
+    return -1;
+/*
+    for(int i=0; i<num; ++i) {
         if(ilal[i]==n) return i;
     }
-
     return -1;
-
+*/
 }
 
 ////////////////////////////////////////////////////////////////////////////////
