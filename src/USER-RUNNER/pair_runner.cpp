@@ -675,6 +675,29 @@ void PairRuNNer::init_forces() {
 
 }
 
+
+inline
+double exp28(double x) {
+  x = 1.0 + x *( 1.0/ 256.0 + x * 0.5 /65536. );
+  x *= x; x *= x; x *= x; x *= x;
+  x *= x; x *= x; x *= x; x *= x;
+  return x;
+}
+
+inline
+double exp35(double x) {
+  x = 1.0 + x *( 1.0/ 32.0 + x * ( 1.0 /2048. + x*1.0/196608.0) );
+  x *= x; x *= x; x *= x; x *= x;  x *= x; 
+  return x;
+}
+
+inline
+double exp46(double x) {
+  x = 1.0 + x *( 1.0 + x * ( 0.5 + x* (1.0/6.0 + x*1.0/1536.)/64.0  )/64.0  )/64.0;
+  x *= x; x *= x; x *= x; x *= x;  x *= x;   x *= x; 
+  return x;
+}
+
 // calculate forces on local and ghost atoms from saved data
 void PairRuNNer::calc_forces() {
  
@@ -2103,7 +2126,7 @@ void PairRuNNer::calc_G_dG_group(int ca, RuNNer_forces *F, RuNNer_symfuncGroup *
                                 for(int isym=0; isym<numSF; ++isym) {
                                     plambda = 1.0 + lambda[isym] * costijk;
                                     if(etaind[isym] == isym) {
-                                        vexp = exp(-eta[isym] * r2sum);
+                                        vexp = exp(-eta[isym] * r2sum); // use exp46 for further speedup
                                     }
                                     if(plambda <= 0.0) fg = 0.0;
                                     else {
