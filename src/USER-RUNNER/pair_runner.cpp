@@ -2859,7 +2859,14 @@ int PairRuNNer::RuNNer_neighbor::calc(RuNNer_atom **a, int i) {
 // find LAMMPS atom list index in RuNNer neighbor list
 int PairRuNNer::RuNNer_neighbor::find_nindex(int n) {
 
-    //!MC OPTIMIZED: ASSUMES THE LIST IS SORTED!!
+    for(int i=0; i<num; i++) {
+        if(ilal[i]==n) return i;
+    }
+
+    return -1;
+
+    /* 
+    //!MC OPTIMIZED: ASSUMES THE LIST IS SORTED, WHICH IS NOT ALWAYS THE CASE!!!
     int a=0, b=num-1, c=b; 
     if ( ilal[a]>n  || ilal[b]<n) return -1;    
     
@@ -2868,15 +2875,13 @@ int PairRuNNer::RuNNer_neighbor::find_nindex(int n) {
        if (ilal[c]>n) b=c; else a=c;
        c=(a+b)/2;
     }
+    */
 
-    if (ilal[c]==n) return c; 
-    return -1;
-/*
-    int i;
+/*  int i;
     for(i=0; i<num; ++i) {
         if(ilal[i]==n) break ; //return i;
     }
-     printf(" %d %d vs %d %d\n", c, ilal[c], i, ilal[i]);
+     printf(" %d vs %d for tgt %d\n", ilal[c], ilal[i], n);
      if (ilal[i]==n && ilal[c]!=n) printf("MISMATCH!!\n");
      if(ilal[c]==n) return c; else return -1;
     return -1;
