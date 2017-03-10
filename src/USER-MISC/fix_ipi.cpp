@@ -33,6 +33,7 @@
 #include "domain.h"
 #include "compute_pressure.h"
 #include <errno.h>
+#include <iostream>
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
@@ -57,6 +58,8 @@ using namespace FixConst;
 #include <sys/un.h>
 #include <netdb.h>
 #endif
+
+int call_counter(0);
 
 #define MSGLEN 12
 
@@ -301,6 +304,8 @@ void FixIPI::initial_integrate(int vflag)
 
       // finally read position data into buffer
       readbuffer(ipisock, (char*) buffer, 8*bsize, error);
+      call_counter += 1;
+      std::cout << "READING POSITION FROM IPI" << call_counter << std::endl;
     } else
       error->one(FLERR, "Wrapper did not send positions, I will now die!");
   }
@@ -437,5 +442,3 @@ void FixIPI::final_integrate()
 
   hasdata=0;
 }
-
-
